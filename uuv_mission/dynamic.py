@@ -9,6 +9,7 @@ import pandas as pd
 
 
 
+
 class Submarine:
     def __init__(self):
 
@@ -80,11 +81,34 @@ class Mission:
 
     @classmethod
     def from_csv(cls, file_name: str):
-        # You are required to implement this method
-        df = pd.read_csv(mission.csv)
-        pass
+        """
+        Construct a Mission from a CSV file.
+        Accepts flexible column sets; will try to pass known arrays to the constructor
+        and otherwise attach data as attributes on a new instance.
+        """
+        df = pd.read_csv(file_name)
 
+        # pick up commonly expected columns (adjust names to your CSV)
+        known_cols = ("cave_height", "cave_depth", "reference", "time", "x", "y", "z")
+        kwargs = {c: df[c].values for c in known_cols if c in df.columns}
 
+        # try to construct normally, otherwise create instance and attach data
+        try:
+            return cls(**kwargs)
+        except TypeError:
+            inst = cls.__new__(cls)
+            # attempt to call a no-arg __init__ if available
+            try:
+                inst.__init__()
+            except TypeError:
+                pass
+            for k, v in kwargs.items():
+                setattr(inst, k, v)
+            # also attach raw dataframe for debugging if needed
+            setattr(inst, "_df", df)
+            return inst
+        
+   
 class ClosedLoop:
     def __init__(self, plant: Submarine, controller):
         self.plant = plant
@@ -104,7 +128,12 @@ class ClosedLoop:
             positions[t] = self.plant.get_position()
             observation_t = self.plant.get_depth()
             # Call your controller here
+            error_t = mission.reference[t] - observation_t
+            actions[t] = self.controller.step(error_t)
+            
             self.plant.transition(actions[t], disturbances[t])
+
+            
 
         return Trajectory(positions)
         
